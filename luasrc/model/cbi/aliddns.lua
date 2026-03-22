@@ -1,3 +1,6 @@
+local sys = require "luci.sys"
+local fs = require "nixio.fs"
+
 local m, s, o
 
 m = Map("aliddns", translate("AliDDNS"))
@@ -5,21 +8,23 @@ m = Map("aliddns", translate("AliDDNS"))
 s = m:section(TypedSection, "base", translate("Base"))
 s.anonymous = true
 
-o = s:option(Flag, "enable", translate("enable"))
+o = s:option(Flag, "enable", translate("Enable"))
 o.rmempty = false
 
 o = s:option(Flag, "clean", translate("Clean Before Update"))
 o.rmempty = false
 
-o = s:option(Flag, "ipv4", translate("Enabled IPv4"))
+o = s:option(Flag, "ipv4", translate("Enable IPv4"))
 o.rmempty = false
 
-o = s:option(Flag, "ipv6", translate("Enabled IPv6"))
+o = s:option(Flag, "ipv6", translate("Enable IPv6"))
 o.rmempty = false
 
 o = s:option(Value, "app_key", translate("Access Key ID"))
+o.password = true
 
 o = s:option(Value, "app_secret", translate("Access Key Secret"))
+o.password = true
 
 o = s:option(
 	ListValue,
@@ -56,45 +61,30 @@ o.rmempty = false
 o = s:option(Value, "time", translate("Inspection Time"),
 	translate("Unit: Minute, Range: 1-59"))
 o.default = "10"
+o.datatype = "range(1,59)"
 o.rmempty = false
 
 s = m:section(TypedSection, "base", translate("Update Log"))
 s.anonymous = true
 
 local log_path = "/var/log/aliddns.log"
+
 o = s:option(TextValue, "sylogtext")
 o.rows = 16
 o.readonly = "readonly"
 o.wrap = "off"
 o.cfgvalue = function(self, section)
-	local log_content = ""
-	if nixio.fs.access(log_path) then
-		local f = io.open(log_path, "r")
-		if f then
-			local lines = {}
-			for i = 1, 200 do
-				local line = f:read("*l")
-				if not line then break end
-				table.insert(lines, line)
-			end
-			f:close()
-			if #lines > 100 then
-				for i = #lines - 99, #lines do
-					log_content = log_content .. lines[i] .. "\n"
-				end
-			else
-				log_content = table.concat(lines, "\n")
-			end
-		end
+	if fs.access(log_path) then
+		return sys.exec("tail -n 100 " .. log_path) or ""
 	end
-	return log_content
+	return ""
 end
 
 o.write = function(self, section, value)
 end
 
 if luci.http.formvalue("cbi.apply") then
-	io.popen("/etc/init.d/aliddns restart &")
+	sys.call("/etc/init.d/aliddns restart >/dev/null 2>&1 &")
 end
 
 return m
